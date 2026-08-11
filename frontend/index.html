@@ -1,0 +1,1462 @@
+<!DOCTYPE html>
+<html lang="es" class="dark scroll-smooth">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f0f13">
+<title>AnimeFlow · Tu directorio de anime</title>
+<meta name="description" content="Directorio de anime con catálogo, emisiones del día, favoritos e historial. Índice de enlaces embebidos externos.">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<link rel="preconnect" href="https://cdn.myanimelist.net">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      fontFamily: { sans: ['Outfit', 'system-ui', 'sans-serif'] },
+      colors: {
+        ink:  { 900:'#0b0b0f', 850:'#0f0f13', 800:'#18181c', 700:'#1f1f26', 600:'#2a2a33', 500:'#3a3a45' },
+        acc:  { DEFAULT:'var(--acc)', soft:'var(--acc-soft)', dim:'var(--acc-dim)' }
+      },
+      boxShadow: {
+        glow: '0 0 0 1px var(--acc-dim), 0 8px 40px -8px var(--acc-soft)',
+        card: '0 18px 40px -18px rgba(0,0,0,.9)'
+      },
+      animation: {
+        'fade-up':'fadeUp .5s cubic-bezier(.16,1,.3,1) both',
+        'fade-in':'fadeIn .35s ease both',
+        'shimmer':'shimmer 1.6s linear infinite',
+        'float':'float 7s ease-in-out infinite'
+      },
+      keyframes: {
+        fadeUp:{ '0%':{opacity:0, transform:'translateY(14px)'}, '100%':{opacity:1, transform:'none'} },
+        fadeIn:{ '0%':{opacity:0}, '100%':{opacity:1} },
+        shimmer:{ '0%':{backgroundPosition:'-500px 0'}, '100%':{backgroundPosition:'500px 0'} },
+        float:{ '0%,100%':{transform:'scale(1.05) translateY(0)'}, '50%':{transform:'scale(1.12) translateY(-1.5%)'} }
+      }
+    }
+  }
+}
+</script>
+
+<style>
+  :root{
+    --acc:#8b5cf6; --acc-soft:rgba(139,92,246,.45); --acc-dim:rgba(139,92,246,.28);
+    --acc2:#22d3ee;
+  }
+  html[data-tema="cian"]    { --acc:#22d3ee; --acc-soft:rgba(34,211,238,.45); --acc-dim:rgba(34,211,238,.28); --acc2:#818cf8; }
+  html[data-tema="azul"]    { --acc:#3b82f6; --acc-soft:rgba(59,130,246,.45); --acc-dim:rgba(59,130,246,.28); --acc2:#22d3ee; }
+  html[data-tema="rosa"]    { --acc:#f43f5e; --acc-soft:rgba(244,63,94,.45);  --acc-dim:rgba(244,63,94,.28);  --acc2:#fb923c; }
+  html[data-tema="verde"]   { --acc:#10b981; --acc-soft:rgba(16,185,129,.45); --acc-dim:rgba(16,185,129,.28); --acc2:#a3e635; }
+
+  body{ background:#0f0f13; color:#f4f4f5; -webkit-font-smoothing:antialiased; }
+  body.cine{ background:#000; }
+  body.cine .dim-cine{ opacity:.12; pointer-events:none; transition:opacity .4s; }
+
+  ::selection{ background:var(--acc); color:#fff; }
+
+  /* Scrollbars */
+  ::-webkit-scrollbar{ width:10px; height:8px }
+  ::-webkit-scrollbar-track{ background:#0f0f13 }
+  ::-webkit-scrollbar-thumb{ background:#2a2a33; border-radius:9px }
+  ::-webkit-scrollbar-thumb:hover{ background:var(--acc) }
+  .no-sb::-webkit-scrollbar{ display:none }
+  .no-sb{ -ms-overflow-style:none; scrollbar-width:none }
+
+  .glass{ background:rgba(15,15,19,.72); backdrop-filter:blur(18px) saturate(150%); -webkit-backdrop-filter:blur(18px) saturate(150%); }
+  .txt-grad{ background:linear-gradient(100deg,var(--acc),var(--acc2)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .btn-acc{ background:linear-gradient(100deg,var(--acc),var(--acc2)); }
+
+  .skel{ background:linear-gradient(90deg,#1f1f26 0%,#2a2a33 40%,#1f1f26 80%); background-size:500px 100%; }
+
+  .card:hover .card-img{ transform:scale(1.09); }
+  .card-img{ transition:transform .55s cubic-bezier(.16,1,.3,1); }
+  .card:hover .card-ov{ opacity:1; transform:translateY(0); }
+  .card-ov{ opacity:0; transform:translateY(8px); transition:.35s cubic-bezier(.16,1,.3,1); }
+
+  .line-2{ display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden }
+  .line-3{ display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden }
+  .line-5{ display:-webkit-box; -webkit-line-clamp:5; -webkit-box-orient:vertical; overflow:hidden }
+
+  .ratio-16-9{ position:relative; width:100%; padding-top:56.25% }
+  .ratio-16-9 > *{ position:absolute; inset:0; width:100%; height:100% }
+
+  [hidden]{ display:none !important }
+  .chip-on{ background:var(--acc); color:#fff; border-color:transparent }
+</style>
+</head>
+
+<body class="font-sans min-h-screen antialiased">
+
+<!-- ══════════════════════════════ NAVBAR ══════════════════════════════ -->
+<header id="navbar" class="dim-cine sticky top-0 z-50 glass border-b border-white/5 transition-all">
+  <nav class="mx-auto max-w-[1600px] px-4 lg:px-8">
+    <div class="flex h-16 items-center gap-3">
+
+      <!-- Logo -->
+      <a href="#/inicio" class="flex items-center gap-2 shrink-0 group">
+        <span class="grid h-9 w-9 place-items-center rounded-xl btn-acc shadow-glow group-hover:scale-105 transition">
+          <svg viewBox="0 0 24 24" class="h-5 w-5 text-white" fill="currentColor"><path d="M8 5.5v13l11-6.5-11-6.5Z"/></svg>
+        </span>
+        <span class="text-xl font-extrabold tracking-tight hidden sm:block">Anime<span class="txt-grad">Flow</span></span>
+      </a>
+
+      <!-- Buscador -->
+      <div class="relative flex-1 max-w-xl mx-auto">
+        <div class="relative">
+          <svg class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="q" type="search" autocomplete="off" placeholder="Buscar anime…  (pulsa /)"
+            class="w-full rounded-xl bg-ink-800/90 border border-white/10 py-2.5 pl-10 pr-14 text-sm placeholder:text-zinc-500 outline-none focus:border-acc focus:ring-2 focus:ring-acc/25 transition">
+          <kbd class="absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-white/10 bg-ink-700 px-1.5 py-0.5 text-[10px] text-zinc-500 hidden sm:block">/</kbd>
+        </div>
+        <!-- Dropdown autocompletado -->
+        <div id="sugerencias" hidden
+          class="absolute left-0 right-0 top-[calc(100%+8px)] max-h-[420px] overflow-y-auto rounded-2xl border border-white/10 bg-ink-800 backdrop-blur-xl p-1.5 shadow-2xl animate-fade-in"></div>
+      </div>
+
+      <!-- Enlaces -->
+      <div class="hidden lg:flex items-center gap-1 text-sm">
+        <a href="#/inicio"     data-nav class="rounded-lg px-3 py-2 text-zinc-400 hover:text-white hover:bg-white/5 transition">Inicio</a>
+        <a href="#/directorio" data-nav class="rounded-lg px-3 py-2 text-zinc-400 hover:text-white hover:bg-white/5 transition">Directorio</a>
+        <a href="#/calendario" data-nav class="rounded-lg px-3 py-2 text-zinc-400 hover:text-white hover:bg-white/5 transition">Emisiones</a>
+        <a href="#/favoritos"  data-nav class="rounded-lg px-3 py-2 text-zinc-400 hover:text-white hover:bg-white/5 transition">Mi Lista <span id="badge-fav" class="ml-1 rounded-md bg-acc px-1.5 text-[10px] font-bold text-white" hidden>0</span></a>
+
+        <!-- Menú géneros -->
+        <div class="relative" id="menu-generos">
+          <button class="flex items-center gap-1 rounded-lg px-3 py-2 text-zinc-400 hover:text-white hover:bg-white/5 transition">
+            Géneros
+            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div id="dd-generos" hidden class="absolute right-0 top-[calc(100%+6px)] w-[420px] rounded-2xl border border-white/10 bg-ink-800 backdrop-blur-xl p-3 shadow-2xl animate-fade-in">
+            <div class="grid grid-cols-3 gap-1" id="lista-generos"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Acciones -->
+      <div class="flex items-center gap-1.5 shrink-0">
+        <button id="btn-random" title="Anime aleatorio (R)" class="grid h-9 w-9 place-items-center rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition">
+          <svg class="h-4.5 w-4.5" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.2" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.2" fill="currentColor"/><circle cx="15.5" cy="8.5" r="1.2" fill="currentColor"/><circle cx="8.5" cy="15.5" r="1.2" fill="currentColor"/></svg>
+        </button>
+        <button id="btn-tema" title="Color de acento" class="grid h-9 w-9 place-items-center rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18 4.5 4.5 0 0 0 0-9 4.5 4.5 0 0 1 0-9Z" fill="currentColor" stroke="none"/></svg>
+        </button>
+        <button id="btn-menu" class="grid h-9 w-9 place-items-center rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 lg:hidden transition">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Selector de acento -->
+    <div id="paleta" hidden class="absolute right-4 top-16 z-50 flex gap-2 rounded-xl border border-white/10 bg-ink-800 p-2.5 shadow-2xl">
+      <button data-tema="violeta" class="h-7 w-7 rounded-full ring-2 ring-white/20" style="background:#8b5cf6"></button>
+      <button data-tema="cian"    class="h-7 w-7 rounded-full ring-2 ring-white/20" style="background:#22d3ee"></button>
+      <button data-tema="azul"    class="h-7 w-7 rounded-full ring-2 ring-white/20" style="background:#3b82f6"></button>
+      <button data-tema="rosa"    class="h-7 w-7 rounded-full ring-2 ring-white/20" style="background:#f43f5e"></button>
+      <button data-tema="verde"   class="h-7 w-7 rounded-full ring-2 ring-white/20" style="background:#10b981"></button>
+    </div>
+  </nav>
+
+  <!-- Menú móvil -->
+  <div id="menu-movil" hidden class="lg:hidden border-t border-white/5 px-4 py-3 space-y-1 text-sm">
+    <a href="#/inicio"     class="block rounded-lg px-3 py-2.5 hover:bg-white/5">Inicio</a>
+    <a href="#/directorio" class="block rounded-lg px-3 py-2.5 hover:bg-white/5">Directorio</a>
+    <a href="#/calendario" class="block rounded-lg px-3 py-2.5 hover:bg-white/5">Emisiones del día</a>
+    <a href="#/favoritos"  class="block rounded-lg px-3 py-2.5 hover:bg-white/5">Mi Lista</a>
+  </div>
+</header>
+
+<!-- Aviso de modo demo -->
+<div id="aviso-demo" hidden class="dim-cine bg-amber-500/10 border-b border-amber-500/25 px-4 py-2 text-center text-xs text-amber-300">
+  Modo demostración · datos de ejemplo. Configura <code class="rounded bg-black/30 px-1">SUPABASE_URL</code> y <code class="rounded bg-black/30 px-1">SUPABASE_ANON_KEY</code> en el script para usar tu base de datos real.
+</div>
+
+<main id="app" class="min-h-[70vh]"></main>
+
+<!-- ══════════════════════════════ FOOTER ══════════════════════════════ -->
+<footer class="dim-cine mt-24 border-t border-white/5 bg-ink-900">
+  <div class="mx-auto max-w-[1600px] px-4 lg:px-8 py-12 grid gap-10 md:grid-cols-4">
+    <div class="md:col-span-2">
+      <div class="flex items-center gap-2 mb-4">
+        <span class="grid h-8 w-8 place-items-center rounded-lg btn-acc">
+          <svg viewBox="0 0 24 24" class="h-4 w-4 text-white" fill="currentColor"><path d="M8 5.5v13l11-6.5-11-6.5Z"/></svg>
+        </span>
+        <span class="text-lg font-extrabold">Anime<span class="txt-grad">Flow</span></span>
+      </div>
+      <p class="text-sm leading-relaxed text-zinc-500 max-w-lg">
+        Directorio y buscador de series de animación japonesa. Los metadatos provienen de la API pública
+        <a href="https://jikan.moe" target="_blank" rel="noopener" class="text-acc hover:underline">Jikan (MyAnimeList)</a>.
+      </p>
+    </div>
+    <div>
+      <h4 class="mb-3 text-sm font-semibold">Navegación</h4>
+      <ul class="space-y-2 text-sm text-zinc-500">
+        <li><a href="#/inicio" class="hover:text-acc transition">Inicio</a></li>
+        <li><a href="#/directorio" class="hover:text-acc transition">Directorio</a></li>
+        <li><a href="#/calendario" class="hover:text-acc transition">Emisiones del día</a></li>
+        <li><a href="#/favoritos" class="hover:text-acc transition">Mi Lista</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4 class="mb-3 text-sm font-semibold">Mis datos</h4>
+      <ul class="space-y-2 text-sm text-zinc-500">
+        <li><button id="btn-exportar" class="hover:text-acc transition">Exportar Mi Lista (.json)</button></li>
+        <li><button id="btn-importar" class="hover:text-acc transition">Importar Mi Lista</button></li>
+        <li><button id="btn-borrar" class="hover:text-rose-400 transition">Borrar historial local</button></li>
+      </ul>
+      <input id="file-importar" type="file" accept="application/json" hidden>
+    </div>
+  </div>
+
+  <!-- DISCLAIMER LEGAL -->
+  <div class="border-t border-white/5 bg-black/40">
+    <div class="mx-auto max-w-[1600px] px-4 lg:px-8 py-7">
+      <div class="rounded-xl border border-white/10 bg-ink-850 p-5">
+        <h5 class="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-400">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
+          Aviso legal / Disclaimer
+        </h5>
+        <p class="text-[13px] leading-relaxed text-zinc-500">
+          AnimeFlow es un <strong class="text-zinc-400">repositorio e índice de enlaces embebidos alojados en servidores de terceros</strong>.
+          Esta plataforma <strong class="text-zinc-400">no aloja, almacena, transmite ni reproduce archivos de video en sus propios servidores</strong>;
+          únicamente enlaza contenido publicado por terceros mediante marcos <em>iframe</em>. Todas las marcas, títulos, imágenes y
+          derechos de autor pertenecen a sus respectivos propietarios (autores, estudios de animación y licenciatarios).
+          Si eres titular de derechos y consideras que un enlace indexado infringe tu propiedad intelectual, puedes solicitar
+          su retirada a través del formulario de contacto y será eliminado del índice.
+          El responsable de la disponibilidad y legalidad del contenido es exclusivamente el servidor externo que lo aloja.
+        </p>
+      </div>
+      <p class="mt-5 text-center text-xs text-zinc-600">
+        © <span id="anio-actual"></span> AnimeFlow · Metadatos por Jikan API v4 · Hecho con Supabase + Tailwind CSS
+      </p>
+    </div>
+  </div>
+</footer>
+
+<!-- ══════════════════════════ MODAL FICHA TÉCNICA ══════════════════════════ -->
+<div id="modal" hidden class="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-6">
+  <div id="modal-bg" class="absolute inset-0 bg-black/80 backdrop-blur-sm animate-fade-in"></div>
+  <div id="modal-box" class="relative w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl border border-white/10 bg-ink-850 shadow-2xl animate-fade-up no-sb"></div>
+</div>
+
+<!-- ══════════════════════════ MODAL REPORTAR ══════════════════════════ -->
+<div id="modal-rep" hidden class="fixed inset-0 z-[110] grid place-items-center p-4">
+  <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" data-cerrar-rep></div>
+  <div class="relative w-full max-w-md rounded-2xl border border-white/10 bg-ink-850 p-6 shadow-2xl animate-fade-up">
+    <h3 class="mb-1 text-lg font-bold">Reportar enlace caído</h3>
+    <p class="mb-4 text-sm text-zinc-500">Ayúdanos a mantener el índice al día. <span id="rep-servidor" class="text-acc"></span></p>
+    <div class="space-y-2 mb-4" id="rep-motivos">
+      <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-white/10 bg-ink-800 p-3 text-sm hover:border-acc transition">
+        <input type="radio" name="motivo" value="no_carga" checked class="accent-[var(--acc)]"> El video no carga / da error
+      </label>
+      <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-white/10 bg-ink-800 p-3 text-sm hover:border-acc transition">
+        <input type="radio" name="motivo" value="sin_subs" class="accent-[var(--acc)]"> No tiene subtítulos
+      </label>
+      <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-white/10 bg-ink-800 p-3 text-sm hover:border-acc transition">
+        <input type="radio" name="motivo" value="audio" class="accent-[var(--acc)]"> Problema de audio / idioma
+      </label>
+      <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-white/10 bg-ink-800 p-3 text-sm hover:border-acc transition">
+        <input type="radio" name="motivo" value="otro" class="accent-[var(--acc)]"> Otro (episodio equivocado, calidad…)
+      </label>
+    </div>
+    <textarea id="rep-comentario" rows="2" maxlength="300" placeholder="Comentario opcional…"
+      class="mb-4 w-full resize-none rounded-xl border border-white/10 bg-ink-800 p-3 text-sm outline-none focus:border-acc"></textarea>
+    <div class="flex gap-2">
+      <button data-cerrar-rep class="flex-1 rounded-xl border border-white/10 py-2.5 text-sm hover:bg-white/5 transition">Cancelar</button>
+      <button id="rep-enviar" class="flex-1 rounded-xl btn-acc py-2.5 text-sm font-semibold text-white hover:opacity-90 transition">Enviar reporte</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toasts -->
+<div id="toasts" class="fixed bottom-5 right-5 z-[200] flex flex-col gap-2"></div>
+
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   ANIMEFLOW · app.js  (vanilla JS, sin build)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. CONFIGURACIÓN ────────────────────────────────────────────────────── */
+const CONFIG = {
+  // 👉 Pega aquí las credenciales de tu proyecto (Settings → API).
+  //    Usa SIEMPRE la clave `anon public`, NUNCA la `service_role`.
+  SUPABASE_URL:      '',   // ej: 'https://abcdefgh.supabase.co'
+  SUPABASE_ANON_KEY: '',   // ej: 'eyJhbGciOi...'
+  MOCK_URL:          'mock-data.json',
+  PAGINA: 24
+};
+
+const SB = (CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY)
+  ? window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY)
+  : null;
+const MODO_DEMO = !SB;
+
+/* ── 2. UTILIDADES ───────────────────────────────────────────────────────── */
+const $  = (s, c = document) => c.querySelector(s);
+const $$ = (s, c = document) => [...c.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const debounce = (fn, ms = 220) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const norm = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const PLACEHOLDER = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="425"><rect width="100%" height="100%" fill="#1f1f26"/><text x="50%" y="50%" fill="#3a3a45" font-family="sans-serif" font-size="17" text-anchor="middle">Sin portada</text></svg>`);
+
+function toast(msg, tipo = 'ok') {
+  const colores = { ok:'border-emerald-500/40 text-emerald-300', err:'border-rose-500/40 text-rose-300', info:'border-white/15 text-zinc-200' };
+  const el = document.createElement('div');
+  el.className = `glass rounded-xl border px-4 py-3 text-sm shadow-2xl animate-fade-up ${colores[tipo]}`;
+  el.textContent = msg;
+  $('#toasts').append(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 300); }, 3200);
+}
+
+const COLOR_ESTADO = {
+  'En emisión':   'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+  'Finalizado':   'bg-sky-500/15 text-sky-400 border-sky-500/30',
+  'Próximamente': 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+  'Pausado':      'bg-zinc-500/15 text-zinc-400 border-zinc-500/30',
+  'Cancelado':    'bg-rose-500/15 text-rose-400 border-rose-500/30'
+};
+const DIAS = ['lunes','martes','miércoles','jueves','viernes','sábado','domingo'];
+const hoyES = () => DIAS[(new Date().getDay() + 6) % 7];
+
+/* ── 3. ALMACÉN LOCAL (favoritos, historial, preferencias) ───────────────── */
+const Store = {
+  _get(k, d) { try { return JSON.parse(localStorage.getItem('af:' + k)) ?? d; } catch { return d; } },
+  _set(k, v) { try { localStorage.setItem('af:' + k, JSON.stringify(v)); } catch {} },
+
+  favoritos()          { return this._get('favoritos', []); },
+  esFavorito(malId)    { return this.favoritos().some(f => f.mal_id === malId); },
+  alternarFavorito(a)  {
+    const lista = this.favoritos();
+    const i = lista.findIndex(f => f.mal_id === a.mal_id);
+    if (i >= 0) { lista.splice(i, 1); toast('Eliminado de Mi Lista', 'info'); }
+    else {
+      lista.unshift({ mal_id:a.mal_id, slug:a.slug, titulo:a.titulo, titulo_espanol:a.titulo_espanol,
+                      portada:a.portada, generos:a.generos, puntuacion:a.puntuacion, estado:a.estado,
+                      episodios_total:a.episodios_total, agregado:Date.now() });
+      toast('Agregado a Mi Lista ✓');
+    }
+    this._set('favoritos', lista); UI.badgeFavoritos();
+    return i < 0;
+  },
+
+  historial()          { return this._get('historial', []); },
+  verEpisodio(anime, num, total, segundos = 0) {
+    const h = this.historial().filter(x => x.mal_id !== anime.mal_id);
+    h.unshift({ mal_id:anime.mal_id, slug:anime.slug, titulo:anime.titulo, titulo_espanol:anime.titulo_espanol,
+                portada:anime.portada, episodio:num, total:total || anime.episodios_total, segundos, ts:Date.now() });
+    this._set('historial', h.slice(0, 40));
+  },
+  ultimoVisto(malId)   { return this.historial().find(x => x.mal_id === malId) || null; },
+
+  prefs()              { return this._get('prefs', { tema:'violeta', cine:false, servidor:null }); },
+  setPref(k, v)        { const p = this.prefs(); p[k] = v; this._set('prefs', p); },
+
+  exportar() {
+    const data = { version:1, exportado:new Date().toISOString(), favoritos:this.favoritos(), historial:this.historial(), prefs:this.prefs() };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type:'application/json' }));
+    const a = Object.assign(document.createElement('a'), { href:url, download:`animeflow-milista-${Date.now()}.json` });
+    a.click(); URL.revokeObjectURL(url);
+    toast('Mi Lista exportada ✓');
+  },
+  importar(json) {
+    if (!json || !Array.isArray(json.favoritos)) return toast('Archivo no válido', 'err');
+    this._set('favoritos', json.favoritos);
+    if (Array.isArray(json.historial)) this._set('historial', json.historial);
+    UI.badgeFavoritos(); toast(`${json.favoritos.length} títulos importados ✓`); Router.render();
+  },
+  borrar() { ['favoritos','historial'].forEach(k => localStorage.removeItem('af:' + k)); UI.badgeFavoritos(); toast('Datos locales borrados', 'info'); Router.render(); }
+};
+
+/* ── 4. CAPA DE DATOS (Supabase ↔ mock) ─────────────────────────────────── */
+const DB = {
+  _cache: null,
+
+  async _mock() {
+    if (this._cache) return this._cache;
+    try {
+      const r = await fetch(CONFIG.MOCK_URL);
+      if (!r.ok) throw new Error('mock no disponible');
+      this._cache = await r.json();
+    } catch {
+      this._cache = { animes: [], emisiones_hoy: [] };
+      toast('No se pudo cargar mock-data.json', 'err');
+    }
+    return this._cache;
+  },
+
+  /** Catálogo con filtros aplicados en servidor (Supabase) o en cliente (mock). */
+  async catalogo(f = {}) {
+    if (SB) {
+      let q = SB.from('v_catalogo').select('*', { count:'exact' });
+      if (f.generos?.length) q = q.contains('generos', f.generos);
+      if (f.estado)          q = q.eq('estado', f.estado);
+      if (f.anio)            q = q.eq('anio', Number(f.anio));
+      if (f.estacion)        q = q.eq('estacion', f.estacion);
+      if (f.tipo)            q = q.eq('tipo', f.tipo);
+      const orden = { recientes:['fecha_estreno',true], vistos:['vistas',true], puntuacion:['puntuacion',true], az:['titulo',false] }[f.orden || 'puntuacion'];
+      q = q.order(orden[0], { ascending: !orden[1], nullsFirst:false });
+      const desde = (f.pagina || 0) * CONFIG.PAGINA;
+      const { data, count, error } = await q.range(desde, desde + CONFIG.PAGINA - 1);
+      if (error) { console.error(error); toast('Error al consultar Supabase', 'err'); return { items:[], total:0 }; }
+      return { items:data || [], total:count || 0 };
+    }
+
+    let items = [...(await this._mock()).animes];
+    if (f.generos?.length) items = items.filter(a => f.generos.every(g => (a.generos || []).includes(g)));
+    if (f.estado)   items = items.filter(a => a.estado === f.estado);
+    if (f.anio)     items = items.filter(a => a.anio === Number(f.anio));
+    if (f.estacion) items = items.filter(a => a.estacion === f.estacion);
+    if (f.tipo)     items = items.filter(a => a.tipo === f.tipo);
+    const cmp = {
+      recientes:  (a,b) => String(b.fecha_estreno || '').localeCompare(String(a.fecha_estreno || '')),
+      vistos:     (a,b) => (b.vistas || 0) - (a.vistas || 0),
+      puntuacion: (a,b) => (b.puntuacion || 0) - (a.puntuacion || 0),
+      az:         (a,b) => a.titulo.localeCompare(b.titulo)
+    }[f.orden || 'puntuacion'];
+    items.sort(cmp);
+    const desde = (f.pagina || 0) * CONFIG.PAGINA;
+    return { items: items.slice(desde, desde + CONFIG.PAGINA), total: items.length };
+  },
+
+  async destacados() {
+    if (SB) {
+      const { data } = await SB.from('animes').select('*').eq('destacado', true).limit(5);
+      if (data?.length) return data;
+      const { data: top } = await SB.from('v_catalogo').select('*').order('puntuacion', { ascending:false, nullsFirst:false }).limit(5);
+      return top || [];
+    }
+    const all = (await this._mock()).animes;
+    return all.filter(a => a.destacado).slice(0, 5).length
+      ? all.filter(a => a.destacado).slice(0, 5)
+      : [...all].sort((a,b) => (b.puntuacion||0)-(a.puntuacion||0)).slice(0, 5);
+  },
+
+  async emisionesHoy() {
+    if (SB) {
+      const { data } = await SB.from('v_emisiones_hoy').select('*');
+      return data || [];
+    }
+    const m = await this._mock();
+    if (m.emisiones_hoy?.length) return m.emisiones_hoy;
+    // Fallback: derivar del catálogo por día de emisión
+    return m.animes.filter(a => a.dia_emision === hoyES()).map(a => ({
+      mal_id:a.mal_id, anime_id:a.id, slug:a.slug, titulo:a.titulo_espanol || a.titulo, portada:a.portada,
+      dia:a.dia_emision, hora_local:a.hora_local || '—', episodio_esperado:a.ultimo_episodio || null,
+      episodio_subido:a.ultimo_episodio || 0, estado_emision:'Programado', generos:a.generos, puntuacion:a.puntuacion
+    }));
+  },
+
+  async semana() {
+    const m = SB ? { animes: (await SB.from('v_catalogo').select('*').eq('estado','En emisión').limit(300)).data || [] } : await this._mock();
+    const mapa = Object.fromEntries(DIAS.map(d => [d, []]));
+    (m.animes || []).forEach(a => { if (a.dia_emision && mapa[a.dia_emision]) mapa[a.dia_emision].push(a); });
+    return mapa;
+  },
+
+  async porSlug(slug) {
+    if (SB) {
+      const { data } = await SB.from('animes').select('*').eq('slug', slug).limit(1).single();
+      return data || null;
+    }
+    return (await this._mock()).animes.find(a => a.slug === slug) || null;
+  },
+
+  async episodios(animeId) {
+    if (SB) {
+      const { data } = await SB.from('episodios').select('*').eq('anime_id', animeId).eq('publicado', true).order('numero');
+      return data || [];
+    }
+    return ((await this._mock()).episodios || []).filter(e => e.anime_id === animeId).sort((a,b) => a.numero - b.numero);
+  },
+
+  async servidores(episodioId) {
+    if (SB) {
+      const { data } = await SB.from('servidores').select('*').eq('episodio_id', episodioId).eq('activo', true).order('orden');
+      return data || [];
+    }
+    return ((await this._mock()).servidores || []).filter(s => s.episodio_id === episodioId);
+  },
+
+  async buscar(q) {
+    if (!q || q.trim().length < 2) return [];
+    if (SB) {
+      const { data, error } = await SB.rpc('buscar_animes', { q: q.trim(), lim: 8 });
+      if (!error && data) return data;
+      const { data: fb } = await SB.from('v_catalogo').select('*').ilike('titulo', `%${q}%`).limit(8);
+      return fb || [];
+    }
+    const nq = norm(q);
+    return (await this._mock()).animes
+      .filter(a => norm(a.titulo).includes(nq) || norm(a.titulo_espanol).includes(nq)
+                || (a.titulos_alt || []).some(t => norm(t).includes(nq)))
+      .slice(0, 8);
+  },
+
+  async generos() {
+    if (SB) { const { data } = await SB.from('generos').select('nombre').order('nombre'); if (data?.length) return data.map(g => g.nombre); }
+    const set = new Set();
+    ((await this._mock()).animes || []).forEach(a => (a.generos || []).forEach(g => set.add(g)));
+    return [...set].sort((a,b) => a.localeCompare(b));
+  },
+
+  async reportar(servidorId, motivo, comentario) {
+    if (!SB) { console.log('[demo] reporte', { servidorId, motivo, comentario }); return true; }
+    const { error } = await SB.rpc('reportar_enlace', { p_servidor_id: servidorId, p_motivo: motivo, p_comentario: comentario });
+    if (error) { const r = await SB.from('reportes').insert({ servidor_id:servidorId, motivo, comentario }); return !r.error; }
+    return true;
+  },
+
+  async sumarVista(animeId) { if (SB && animeId) SB.rpc('incrementar_vistas', { p_anime_id: animeId }).then(() => {}, () => {}); }
+};
+
+/* ── 5. COMPONENTES DE UI ────────────────────────────────────────────────── */
+const UI = {
+
+  badgeFavoritos() {
+    const n = Store.favoritos().length, b = $('#badge-fav');
+    if (!b) return;
+    b.textContent = n; b.hidden = n === 0;
+  },
+
+  skeletons(n = 12) {
+    return `<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-4 lg:gap-5">
+      ${Array.from({ length:n }, () => `
+        <div class="space-y-2">
+          <div class="skel animate-shimmer aspect-[2/3] rounded-xl"></div>
+          <div class="skel animate-shimmer h-3 w-4/5 rounded"></div>
+          <div class="skel animate-shimmer h-2.5 w-2/5 rounded"></div>
+        </div>`).join('')}
+    </div>`;
+  },
+
+  /** Tarjeta de portada vertical */
+  card(a, extra = '') {
+    const t   = a.titulo_espanol || a.titulo;
+    const ep  = a.ultimo_episodio ?? a.episodio_subido ?? null;
+    const vis = Store.ultimoVisto(a.mal_id);
+    const prog = vis && (a.episodios_total || vis.total)
+      ? Math.min(100, Math.round(vis.episodio / (a.episodios_total || vis.total) * 100)) : 0;
+
+    return `
+    <article class="card group relative cursor-pointer" data-slug="${esc(a.slug)}">
+      <div class="relative overflow-hidden rounded-xl bg-ink-700 aspect-[2/3] shadow-card">
+        <img src="${esc(a.portada || PLACEHOLDER)}" alt="${esc(t)}" loading="lazy" decoding="async"
+             onerror="this.src='${PLACEHOLDER}'"
+             class="card-img h-full w-full object-cover">
+
+        <div class="absolute inset-0 bg-gradient-to-t from-black/95 via-black/25 to-transparent opacity-70 group-hover:opacity-95 transition"></div>
+
+        <!-- Badges superiores -->
+        <div class="absolute left-2 top-2 flex flex-wrap gap-1">
+          ${a.puntuacion ? `<span class="flex items-center gap-1 rounded-md bg-black/70 backdrop-blur px-1.5 py-0.5 text-[11px] font-bold text-amber-400">★ ${Number(a.puntuacion).toFixed(1)}</span>` : ''}
+          ${a.calidad ? `<span class="rounded-md bg-acc/90 px-1.5 py-0.5 text-[10px] font-bold text-white">${esc(a.calidad)}</span>` : ''}
+        </div>
+        <div class="absolute right-2 top-2 flex flex-col items-end gap-1">
+          <span class="rounded-md bg-black/70 backdrop-blur px-1.5 py-0.5 text-[10px] font-semibold text-zinc-300">${esc(a.audio || 'SUB')}</span>
+          ${a.estado === 'En emisión' ? `<span class="flex items-center gap-1 rounded-md bg-black/70 backdrop-blur px-1.5 py-0.5 text-[10px] text-emerald-400"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>EN VIVO</span>` : ''}
+        </div>
+
+        <!-- Barra de progreso del historial -->
+        ${prog ? `<div class="absolute bottom-0 left-0 right-0 h-1 bg-black/60"><div class="h-full btn-acc" style="width:${prog}%"></div></div>` : ''}
+
+        <!-- Overlay hover -->
+        <div class="card-ov absolute inset-x-0 bottom-0 p-3">
+          ${ep ? `<p class="mb-1.5 text-[11px] font-semibold text-acc">Episodio ${ep}${a.episodios_total ? ` / ${a.episodios_total}` : ''}</p>` : ''}
+          <p class="line-2 text-[11px] leading-snug text-zinc-400">${esc((a.sinopsis || '').slice(0, 110))}</p>
+          <div class="mt-2 flex gap-1.5">
+            <button data-ver="${esc(a.slug)}" class="flex-1 rounded-lg btn-acc py-1.5 text-[11px] font-bold text-white hover:opacity-90">▶ Ver</button>
+            <button data-fav="${a.mal_id}" title="Mi Lista"
+              class="grid h-7 w-7 place-items-center rounded-lg border border-white/20 bg-black/50 text-xs hover:border-acc">
+              ${Store.esFavorito(a.mal_id) ? '<span class="text-acc">✓</span>' : '+'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <h3 class="mt-2 line-2 text-[13px] font-semibold leading-tight group-hover:text-acc transition">${esc(t)}</h3>
+      <p class="mt-0.5 text-[11px] text-zinc-500">${esc(a.tipo || 'TV')} · ${a.anio || '—'}${a.estado ? ` · ${esc(a.estado)}` : ''}</p>
+      ${extra}
+    </article>`;
+  },
+
+  fila(titulo, items, verMas = '') {
+    if (!items.length) return '';
+    return `
+    <section class="mb-12 animate-fade-up">
+      <div class="mb-4 flex items-end justify-between gap-4">
+        <h2 class="text-xl lg:text-2xl font-bold tracking-tight">${titulo}</h2>
+        ${verMas ? `<a href="${verMas}" class="text-xs text-zinc-500 hover:text-acc transition shrink-0">Ver todo →</a>` : ''}
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-4 lg:gap-5">
+        ${items.map(a => this.card(a)).join('')}
+      </div>
+    </section>`;
+  }
+};
+
+/* ── 6. VISTAS ───────────────────────────────────────────────────────────── */
+const Vistas = {
+
+  /* ---------- INICIO ---------- */
+  async inicio() {
+    const app = $('#app');
+    app.innerHTML = `<div class="skel animate-shimmer h-[62vh] w-full"></div>
+      <div class="mx-auto max-w-[1600px] px-4 lg:px-8 py-10">${UI.skeletons(12)}</div>`;
+
+    const [destacados, hoy, cat] = await Promise.all([
+      DB.destacados(), DB.emisionesHoy(), DB.catalogo({ orden:'puntuacion', pagina:0 })
+    ]);
+    const historial = Store.historial().slice(0, 6);
+    const { items: recientes } = await DB.catalogo({ orden:'recientes', pagina:0 });
+    const emision = cat.items.filter(a => a.estado === 'En emisión').slice(0, 12);
+
+    app.innerHTML = `
+      ${this._hero(destacados)}
+      <div class="mx-auto max-w-[1600px] px-4 lg:px-8 py-10 lg:py-14">
+        ${historial.length ? this._continuar(historial) : ''}
+        ${this._emisionesHoy(hoy)}
+        ${UI.fila('Populares ahora', cat.items.slice(0, 12), '#/directorio?orden=puntuacion')}
+        ${UI.fila('En emisión', emision, '#/directorio?estado=En emisión')}
+        ${UI.fila('Añadidos recientemente', recientes.slice(0, 12), '#/directorio?orden=recientes')}
+      </div>`;
+
+    this._iniciarCarrusel(destacados);
+  },
+
+  _hero(lista) {
+    if (!lista.length) return '';
+    return `
+    <section id="hero" class="dim-cine relative h-[64vh] min-h-[430px] max-h-[720px] overflow-hidden">
+      ${lista.map((a, i) => `
+        <div class="hero-slide absolute inset-0 transition-opacity duration-[900ms] ${i ? 'opacity-0 pointer-events-none' : 'opacity-100'}" data-i="${i}">
+          <img src="${esc(a.banner || a.portada || PLACEHOLDER)}" alt="" onerror="this.src='${esc(a.portada || PLACEHOLDER)}'"
+               class="h-full w-full object-cover object-center animate-float">
+          <div class="absolute inset-0 bg-gradient-to-r from-ink-850 via-ink-850/85 to-transparent"></div>
+          <div class="absolute inset-0 bg-gradient-to-t from-ink-850 via-transparent to-ink-850/60"></div>
+
+          <div class="absolute inset-0 flex items-center">
+            <div class="mx-auto w-full max-w-[1600px] px-4 lg:px-8">
+              <div class="max-w-2xl animate-fade-up">
+                <div class="mb-3 flex flex-wrap items-center gap-2">
+                  <span class="rounded-md btn-acc px-2 py-0.5 text-[11px] font-bold text-white">#${i + 1} EN TENDENCIA</span>
+                  ${a.puntuacion ? `<span class="rounded-md bg-black/60 px-2 py-0.5 text-[11px] font-bold text-amber-400">★ ${Number(a.puntuacion).toFixed(2)}</span>` : ''}
+                  ${a.estado ? `<span class="rounded-md border px-2 py-0.5 text-[11px] font-semibold ${COLOR_ESTADO[a.estado] || ''}">${esc(a.estado)}</span>` : ''}
+                </div>
+                <h1 class="mb-3 text-3xl sm:text-5xl lg:text-6xl font-extrabold leading-[1.05] tracking-tight">${esc(a.titulo_espanol || a.titulo)}</h1>
+                <div class="mb-3 flex flex-wrap gap-1.5">
+                  ${(a.generos || []).slice(0, 4).map(g => `<a href="#/directorio?genero=${encodeURIComponent(g)}" class="rounded-full border border-white/15 bg-black/30 px-2.5 py-0.5 text-[11px] text-zinc-300 hover:border-acc hover:text-acc transition">${esc(g)}</a>`).join('')}
+                </div>
+                <p class="line-3 mb-6 max-w-xl text-sm sm:text-[15px] leading-relaxed text-zinc-400">${esc(a.sinopsis || 'Sin sinopsis disponible.')}</p>
+                <div class="flex flex-wrap gap-2.5">
+                  <button data-ver="${esc(a.slug)}" class="flex items-center gap-2 rounded-xl btn-acc px-6 py-3 text-sm font-bold text-white shadow-glow hover:opacity-90 transition">
+                    <svg viewBox="0 0 24 24" class="h-4 w-4" fill="currentColor"><path d="M8 5.5v13l11-6.5-11-6.5Z"/></svg> Ver ahora
+                  </button>
+                  <button data-slug="${esc(a.slug)}" class="rounded-xl border border-white/15 bg-black/40 px-6 py-3 text-sm font-semibold backdrop-blur hover:bg-white/10 transition">Más información</button>
+                  <button data-fav="${a.mal_id}" class="grid h-11 w-11 place-items-center rounded-xl border border-white/15 bg-black/40 backdrop-blur hover:border-acc transition">
+                    ${Store.esFavorito(a.mal_id) ? '<span class="text-acc">✓</span>' : '+'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>`).join('')}
+
+      <div class="absolute bottom-6 left-1/2 z-10 flex -translate-x-1/2 gap-2">
+        ${lista.map((_, i) => `<button data-dot="${i}" class="h-1.5 rounded-full transition-all ${i ? 'w-5 bg-white/25' : 'w-9 bg-[var(--acc)]'}"></button>`).join('')}
+      </div>
+    </section>`;
+  },
+
+  _iniciarCarrusel(lista) {
+    if (lista.length < 2) return;
+    clearInterval(window.__heroTimer);
+    let i = 0;
+    const ir = n => {
+      i = (n + lista.length) % lista.length;
+      $$('.hero-slide').forEach(s => {
+        const on = +s.dataset.i === i;
+        s.classList.toggle('opacity-0', !on);
+        s.classList.toggle('pointer-events-none', !on);
+        s.classList.toggle('opacity-100', on);
+      });
+      $$('[data-dot]').forEach(d => {
+        const on = +d.dataset.dot === i;
+        d.className = `h-1.5 rounded-full transition-all ${on ? 'w-9 bg-[var(--acc)]' : 'w-5 bg-white/25'}`;
+      });
+    };
+    $$('[data-dot]').forEach(d => d.onclick = () => { ir(+d.dataset.dot); reiniciar(); });
+    const reiniciar = () => { clearInterval(window.__heroTimer); window.__heroTimer = setInterval(() => ir(i + 1), 7000); };
+    reiniciar();
+  },
+
+  _continuar(historial) {
+    return `
+    <section class="mb-12 animate-fade-up">
+      <h2 class="mb-4 text-xl lg:text-2xl font-bold tracking-tight">Continuar viendo</h2>
+      <div class="flex gap-4 overflow-x-auto no-sb pb-2">
+        ${historial.map(h => {
+          const prog = h.total ? Math.min(100, Math.round(h.episodio / h.total * 100)) : 0;
+          return `
+          <a href="#/ver/${esc(h.slug)}/${h.episodio}" class="group relative w-64 shrink-0 overflow-hidden rounded-xl bg-ink-800 shadow-card">
+            <div class="relative aspect-video overflow-hidden bg-ink-700">
+              <img src="${esc(h.portada || PLACEHOLDER)}" alt="" class="card-img h-full w-full object-cover opacity-70 group-hover:opacity-100 group-hover:scale-105"/>
+              <div class="absolute inset-0 grid place-items-center">
+                <span class="grid h-11 w-11 place-items-center rounded-full btn-acc shadow-glow opacity-90 group-hover:scale-110 transition">
+                  <svg viewBox="0 0 24 24" class="h-4 w-4 text-white" fill="currentColor"><path d="M8 5.5v13l11-6.5-11-6.5Z"/></svg>
+                </span>
+              </div>
+              <div class="absolute bottom-0 left-0 right-0 h-1 bg-black/60"><div class="h-full btn-acc" style="width:${prog || 4}%"></div></div>
+            </div>
+            <div class="p-3">
+              <p class="line-2 text-[13px] font-semibold leading-tight">${esc(h.titulo_espanol || h.titulo)}</p>
+              <p class="mt-1 text-[11px] text-zinc-500">Episodio ${h.episodio}${h.total ? ` de ${h.total}` : ''}</p>
+            </div>
+          </a>`;
+        }).join('')}
+      </div>
+    </section>`;
+  },
+
+  _emisionesHoy(hoy) {
+    const icono = { 'Subtitulado':'text-emerald-400', 'Emitido':'text-sky-400', 'Programado':'text-zinc-500', 'Retrasado':'text-amber-400' };
+    return `
+    <section class="mb-12 animate-fade-up">
+      <div class="mb-4 flex items-end justify-between gap-4">
+        <div>
+          <h2 class="flex items-center gap-2.5 text-xl lg:text-2xl font-bold tracking-tight">
+            <span class="grid h-8 w-8 place-items-center rounded-lg btn-acc">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" class="text-white"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+            </span>
+            Capítulos de hoy
+          </h2>
+          <p class="mt-1 text-xs text-zinc-500"><span class="capitalize">${hoyES()}</span> · ${hoy.length} títulos en emisión</p>
+        </div>
+        <a href="#/calendario" class="text-xs text-zinc-500 hover:text-acc transition shrink-0">Semana completa →</a>
+      </div>
+
+      ${hoy.length ? `
+      <div class="flex gap-4 overflow-x-auto no-sb pb-2">
+        ${hoy.map(e => `
+          <article class="card group w-[152px] shrink-0 cursor-pointer" data-slug="${esc(e.slug || '')}">
+            <div class="relative aspect-[2/3] overflow-hidden rounded-xl bg-ink-700 shadow-card">
+              <img src="${esc(e.portada || PLACEHOLDER)}" alt="" loading="lazy" onerror="this.src='${PLACEHOLDER}'" class="card-img h-full w-full object-cover">
+              <div class="absolute inset-0 bg-gradient-to-t from-black/95 to-transparent"></div>
+              <div class="absolute left-1.5 top-1.5 rounded-md bg-black/75 backdrop-blur px-1.5 py-0.5 text-[10px] font-bold text-acc">${esc(e.hora_local || '--:--')}</div>
+              <div class="absolute inset-x-0 bottom-0 p-2">
+                <p class="text-[11px] font-bold text-white">EP ${e.episodio_esperado ?? '?'}</p>
+                <p class="text-[10px] ${icono[e.estado_emision] || 'text-zinc-500'}">● ${esc(e.estado_emision || 'Programado')}</p>
+              </div>
+            </div>
+            <p class="mt-2 line-2 text-[12px] font-medium leading-tight group-hover:text-acc transition">${esc(e.titulo)}</p>
+          </article>`).join('')}
+      </div>`
+      : `<div class="rounded-2xl border border-dashed border-white/10 p-10 text-center text-sm text-zinc-500">
+           Hoy no hay emisiones registradas. Ejecuta <code class="rounded bg-black/40 px-1.5 py-0.5 text-acc">python sync_anime_supabase.py sync-today</code>
+         </div>`}
+    </section>`;
+  },
+
+  /* ---------- DIRECTORIO ---------- */
+  async directorio(params) {
+    const app = $('#app');
+    const f = {
+      generos: params.get('genero') ? [params.get('genero')] : [],
+      estado:   params.get('estado')   || '',
+      anio:     params.get('anio')     || '',
+      estacion: params.get('estacion') || '',
+      tipo:     params.get('tipo')     || '',
+      orden:    params.get('orden')    || 'puntuacion',
+      pagina:   Number(params.get('p') || 0)
+    };
+
+    const generos = await DB.generos();
+    const anioAct = new Date().getFullYear();
+    const anios = Array.from({ length: 26 }, (_, i) => anioAct - i);
+
+    app.innerHTML = `
+    <div class="mx-auto max-w-[1600px] px-4 lg:px-8 py-8 lg:py-12">
+      <header class="mb-8">
+        <h1 class="text-3xl lg:text-4xl font-extrabold tracking-tight">Directorio</h1>
+        <p class="mt-1.5 text-sm text-zinc-500">Explora el catálogo completo con filtros combinables.</p>
+      </header>
+
+      <div class="mb-6 rounded-2xl border border-white/10 bg-ink-800/60 p-4 lg:p-5">
+        <!-- Géneros -->
+        <div class="mb-4">
+          <p class="mb-2 text-[11px] font-bold uppercase tracking-wider text-zinc-500">Géneros</p>
+          <div class="flex flex-wrap gap-1.5" id="chips-genero">
+            ${generos.map(g => `<button data-g="${esc(g)}" class="rounded-full border border-white/10 px-3 py-1 text-xs transition hover:border-acc ${f.generos.includes(g) ? 'chip-on' : 'text-zinc-400'}">${esc(g)}</button>`).join('')}
+          </div>
+        </div>
+
+        <!-- Selects -->
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          ${this._select('f-estado', 'Estado', ['En emisión','Finalizado','Próximamente'], f.estado)}
+          ${this._select('f-anio', 'Año', anios, f.anio)}
+          ${this._select('f-estacion', 'Temporada', ['Invierno','Primavera','Verano','Otoño'], f.estacion)}
+          ${this._select('f-tipo', 'Tipo', ['TV','Movie','OVA','ONA','Special'], f.tipo)}
+          <div>
+            <label class="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-zinc-500">Ordenar por</label>
+            <select id="f-orden" class="w-full rounded-xl border border-white/10 bg-ink-800 px-3 py-2.5 text-sm outline-none focus:border-acc">
+              <option value="puntuacion" ${f.orden==='puntuacion'?'selected':''}>Mejor puntuados</option>
+              <option value="vistos"     ${f.orden==='vistos'?'selected':''}>Más vistos</option>
+              <option value="recientes"  ${f.orden==='recientes'?'selected':''}>Más recientes</option>
+              <option value="az"         ${f.orden==='az'?'selected':''}>A - Z</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="mt-4 flex items-center justify-between gap-3 border-t border-white/5 pt-3">
+          <p id="conteo" class="text-xs text-zinc-500">Cargando…</p>
+          <button id="limpiar" class="text-xs text-zinc-500 hover:text-rose-400 transition">Limpiar filtros ✕</button>
+        </div>
+      </div>
+
+      <div id="grid">${UI.skeletons(18)}</div>
+      <div id="paginacion" class="mt-10 flex items-center justify-center gap-2"></div>
+    </div>`;
+
+    const aplicar = () => {
+      const p = new URLSearchParams();
+      if (f.generos[0]) p.set('genero', f.generos[0]);
+      if (f.estado)   p.set('estado', f.estado);
+      if (f.anio)     p.set('anio', f.anio);
+      if (f.estacion) p.set('estacion', f.estacion);
+      if (f.tipo)     p.set('tipo', f.tipo);
+      if (f.orden)    p.set('orden', f.orden);
+      if (f.pagina)   p.set('p', f.pagina);
+      location.hash = '#/directorio?' + p.toString();
+    };
+
+    $('#chips-genero').onclick = e => {
+      const b = e.target.closest('[data-g]'); if (!b) return;
+      f.generos = f.generos.includes(b.dataset.g) ? [] : [b.dataset.g];
+      f.pagina = 0; aplicar();
+    };
+    ['estado','anio','estacion','tipo','orden'].forEach(k => {
+      const el = $('#f-' + k); if (el) el.onchange = () => { f[k] = el.value; f.pagina = 0; aplicar(); };
+    });
+    $('#limpiar').onclick = () => { location.hash = '#/directorio'; };
+
+    const { items, total } = await DB.catalogo(f);
+    $('#conteo').textContent = `${total} título${total === 1 ? '' : 's'} encontrado${total === 1 ? '' : 's'}`;
+    $('#grid').innerHTML = items.length
+      ? `<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-4 lg:gap-5 animate-fade-up">${items.map(a => UI.card(a)).join('')}</div>`
+      : `<div class="rounded-2xl border border-dashed border-white/10 p-16 text-center">
+           <p class="text-4xl mb-3">🔍</p>
+           <p class="text-zinc-400">Ningún anime coincide con esos filtros.</p>
+           <button onclick="location.hash='#/directorio'" class="mt-4 rounded-lg btn-acc px-5 py-2 text-sm font-semibold text-white">Limpiar filtros</button>
+         </div>`;
+
+    const paginas = Math.ceil(total / CONFIG.PAGINA);
+    if (paginas > 1) {
+      const btn = (n, txt, on) => `<button data-p="${n}" class="min-w-[38px] rounded-lg border px-3 py-2 text-sm transition ${on ? 'chip-on border-transparent' : 'border-white/10 text-zinc-400 hover:border-acc'}">${txt}</button>`;
+      let html = f.pagina > 0 ? btn(f.pagina - 1, '←') : '';
+      const desde = Math.max(0, f.pagina - 2), hasta = Math.min(paginas, f.pagina + 3);
+      for (let i = desde; i < hasta; i++) html += btn(i, i + 1, i === f.pagina);
+      if (f.pagina < paginas - 1) html += btn(f.pagina + 1, '→');
+      $('#paginacion').innerHTML = html;
+      $('#paginacion').onclick = e => {
+        const b = e.target.closest('[data-p]'); if (!b) return;
+        f.pagina = +b.dataset.p; aplicar(); window.scrollTo({ top:0, behavior:'smooth' });
+      };
+    }
+  },
+
+  _select(id, etiqueta, opciones, valor) {
+    return `<div>
+      <label class="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-zinc-500">${etiqueta}</label>
+      <select id="${id}" class="w-full rounded-xl border border-white/10 bg-ink-800 px-3 py-2.5 text-sm outline-none focus:border-acc">
+        <option value="">Todos</option>
+        ${opciones.map(o => `<option value="${esc(o)}" ${String(valor) === String(o) ? 'selected' : ''}>${esc(o)}</option>`).join('')}
+      </select>
+    </div>`;
+  },
+
+  /* ---------- CALENDARIO SEMANAL ---------- */
+  async calendario() {
+    const app = $('#app');
+    app.innerHTML = `<div class="mx-auto max-w-[1600px] px-4 lg:px-8 py-10">${UI.skeletons(8)}</div>`;
+    const semana = await DB.semana();
+    const hoy = hoyES();
+
+    app.innerHTML = `
+    <div class="mx-auto max-w-[1600px] px-4 lg:px-8 py-8 lg:py-12">
+      <header class="mb-8">
+        <h1 class="text-3xl lg:text-4xl font-extrabold tracking-tight">Calendario de emisiones</h1>
+        <p class="mt-1.5 text-sm text-zinc-500">Parrilla semanal de los animes en emisión. Hoy es <span class="text-acc capitalize font-semibold">${hoy}</span>.</p>
+      </header>
+
+      <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        ${DIAS.map(d => {
+          const lista = semana[d] || [];
+          const esHoy = d === hoy;
+          return `
+          <div class="rounded-2xl border ${esHoy ? 'border-acc/50 bg-acc/[.04] shadow-glow' : 'border-white/10 bg-ink-800/50'} p-4">
+            <h3 class="mb-3 flex items-center justify-between text-sm font-bold capitalize ${esHoy ? 'text-acc' : ''}">
+              ${d} ${esHoy ? '<span class="rounded-md btn-acc px-1.5 py-0.5 text-[10px] text-white">HOY</span>' : `<span class="text-xs font-normal text-zinc-600">${lista.length}</span>`}
+            </h3>
+            <div class="space-y-1.5 max-h-[440px] overflow-y-auto no-sb">
+              ${lista.length ? lista.map(a => `
+                <button data-slug="${esc(a.slug)}" class="flex w-full items-center gap-2.5 rounded-xl p-1.5 text-left hover:bg-white/5 transition group">
+                  <img src="${esc(a.portada || PLACEHOLDER)}" alt="" loading="lazy" class="h-14 w-10 shrink-0 rounded-lg object-cover bg-ink-700">
+                  <span class="min-w-0 flex-1">
+                    <span class="block line-2 text-[12px] font-medium leading-tight group-hover:text-acc transition">${esc(a.titulo_espanol || a.titulo)}</span>
+                    <span class="mt-0.5 block text-[10px] text-zinc-500">${a.ultimo_episodio ? `EP ${a.ultimo_episodio}` : ''}${a.puntuacion ? ` · ★ ${Number(a.puntuacion).toFixed(1)}` : ''}</span>
+                  </span>
+                </button>`).join('')
+              : '<p class="py-6 text-center text-xs text-zinc-600">Sin emisiones</p>'}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  },
+
+  /* ---------- FAVORITOS ---------- */
+  async favoritos() {
+    const favs = Store.favoritos(), hist = Store.historial();
+    $('#app').innerHTML = `
+    <div class="mx-auto max-w-[1600px] px-4 lg:px-8 py-8 lg:py-12">
+      <header class="mb-8">
+        <h1 class="text-3xl lg:text-4xl font-extrabold tracking-tight">Mi Lista</h1>
+        <p class="mt-1.5 text-sm text-zinc-500">Guardada en este navegador (localStorage) · sin cuenta ni registro.</p>
+      </header>
+
+      ${favs.length ? `
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-4 lg:gap-5 animate-fade-up">
+          ${favs.map(a => UI.card(a)).join('')}
+        </div>`
+      : `<div class="rounded-2xl border border-dashed border-white/10 p-16 text-center">
+           <p class="mb-3 text-4xl">📑</p>
+           <p class="mb-1 text-zinc-300">Tu lista está vacía</p>
+           <p class="mb-5 text-sm text-zinc-500">Pulsa el botón <span class="text-acc">+</span> en cualquier portada para guardarla aquí.</p>
+           <a href="#/directorio" class="inline-block rounded-lg btn-acc px-5 py-2.5 text-sm font-semibold text-white">Explorar directorio</a>
+         </div>`}
+
+      ${hist.length ? `
+      <section class="mt-14">
+        <div class="mb-4 flex items-center justify-between">
+          <h2 class="text-xl font-bold">Historial de reproducción</h2>
+          <button id="limpiar-hist" class="text-xs text-zinc-500 hover:text-rose-400 transition">Limpiar historial</button>
+        </div>
+        <div class="divide-y divide-white/5 rounded-2xl border border-white/10 bg-ink-800/50">
+          ${hist.map(h => `
+            <a href="#/ver/${esc(h.slug)}/${h.episodio}" class="flex items-center gap-4 p-3.5 hover:bg-white/5 transition">
+              <img src="${esc(h.portada || PLACEHOLDER)}" alt="" class="h-16 w-11 rounded-lg object-cover bg-ink-700">
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-semibold">${esc(h.titulo_espanol || h.titulo)}</p>
+                <p class="text-xs text-zinc-500">Episodio ${h.episodio}${h.total ? ` de ${h.total}` : ''}</p>
+              </div>
+              <span class="shrink-0 text-xs text-zinc-600">${new Date(h.ts).toLocaleDateString('es', { day:'2-digit', month:'short' })}</span>
+            </a>`).join('')}
+        </div>
+      </section>` : ''}
+    </div>`;
+
+    const lh = $('#limpiar-hist');
+    if (lh) lh.onclick = () => { localStorage.removeItem('af:historial'); toast('Historial limpiado', 'info'); Router.render(); };
+  },
+
+  /* ---------- FICHA TÉCNICA (modal) ---------- */
+  async ficha(slug) {
+    const a = await DB.porSlug(slug);
+    if (!a) return toast('Anime no encontrado', 'err');
+
+    const box = $('#modal-box');
+    $('#modal').hidden = false;
+    document.body.style.overflow = 'hidden';
+    box.innerHTML = `<div class="skel animate-shimmer h-72 w-full"></div><div class="p-6 space-y-3">
+      <div class="skel animate-shimmer h-6 w-2/3 rounded"></div><div class="skel animate-shimmer h-3 w-full rounded"></div></div>`;
+
+    const eps = await DB.episodios(a.id);
+    const vis = Store.ultimoVisto(a.mal_id);
+    const total = a.episodios_total || eps.length || 0;
+    const bloques = [];
+    for (let i = 0; i < Math.max(eps.length, total); i += 12) bloques.push([i + 1, Math.min(i + 12, Math.max(eps.length, total))]);
+
+    box.innerHTML = `
+      <div class="relative h-56 sm:h-72 overflow-hidden rounded-t-3xl">
+        <img src="${esc(a.banner || a.portada || PLACEHOLDER)}" alt="" class="h-full w-full object-cover" onerror="this.src='${esc(a.portada || PLACEHOLDER)}'">
+        <div class="absolute inset-0 bg-gradient-to-t from-ink-850 via-ink-850/55 to-transparent"></div>
+        <button id="cerrar-modal" class="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full bg-black/60 backdrop-blur text-lg hover:bg-black/85 transition">✕</button>
+      </div>
+
+      <div class="relative -mt-24 px-5 sm:px-8 pb-8">
+        <div class="flex flex-col sm:flex-row gap-5">
+          <img src="${esc(a.portada || PLACEHOLDER)}" alt="${esc(a.titulo)}" onerror="this.src='${PLACEHOLDER}'"
+               class="h-56 w-40 shrink-0 rounded-2xl object-cover shadow-2xl ring-1 ring-white/10 mx-auto sm:mx-0">
+
+          <div class="min-w-0 flex-1 sm:pt-24">
+            <h2 class="text-2xl sm:text-3xl font-extrabold leading-tight">${esc(a.titulo_espanol || a.titulo)}</h2>
+            ${a.titulo_espanol && a.titulo !== a.titulo_espanol ? `<p class="mt-0.5 text-sm text-zinc-500">${esc(a.titulo)}</p>` : ''}
+            ${a.titulo_japones ? `<p class="text-xs text-zinc-600">${esc(a.titulo_japones)}</p>` : ''}
+
+            <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+              ${a.puntuacion ? `<span class="rounded-md bg-amber-500/15 px-2 py-1 font-bold text-amber-400">★ ${Number(a.puntuacion).toFixed(2)}</span>` : ''}
+              ${a.estado ? `<span class="rounded-md border px-2 py-1 font-semibold ${COLOR_ESTADO[a.estado] || ''}">${esc(a.estado)}</span>` : ''}
+              <span class="rounded-md bg-white/5 px-2 py-1 text-zinc-400">${esc(a.tipo || 'TV')}</span>
+              ${total ? `<span class="rounded-md bg-white/5 px-2 py-1 text-zinc-400">${total} eps</span>` : ''}
+              ${a.duracion ? `<span class="rounded-md bg-white/5 px-2 py-1 text-zinc-400">${esc(a.duracion)}</span>` : ''}
+            </div>
+
+            <div class="mt-3 flex flex-wrap gap-1.5">
+              ${[...(a.generos || []), ...(a.temas || [])].map(g =>
+                `<a href="#/directorio?genero=${encodeURIComponent(g)}" data-cierra class="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-zinc-400 hover:border-acc hover:text-acc transition">${esc(g)}</a>`).join('')}
+            </div>
+
+            <div class="mt-4 flex flex-wrap gap-2">
+              <button data-ver="${esc(a.slug)}" class="flex items-center gap-2 rounded-xl btn-acc px-5 py-2.5 text-sm font-bold text-white hover:opacity-90 transition">
+                <svg viewBox="0 0 24 24" class="h-4 w-4" fill="currentColor"><path d="M8 5.5v13l11-6.5-11-6.5Z"/></svg>
+                ${vis ? `Continuar EP ${vis.episodio}` : 'Ver episodio 1'}
+              </button>
+              <button data-fav="${a.mal_id}" class="rounded-xl border border-white/15 px-4 py-2.5 text-sm font-semibold hover:border-acc transition">
+                ${Store.esFavorito(a.mal_id) ? '✓ En Mi Lista' : '+ Mi Lista'}
+              </button>
+              <button data-compartir="${esc(a.slug)}" class="grid h-10 w-10 place-items-center rounded-xl border border-white/15 hover:border-acc transition" title="Compartir">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <p class="mt-6 text-sm leading-relaxed text-zinc-400">${esc(a.sinopsis || 'Sin sinopsis disponible.')}</p>
+
+        <dl class="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4 rounded-2xl border border-white/10 bg-ink-800/60 p-4 text-xs">
+          ${[['Estudio', a.estudio], ['Fuente', a.fuente], ['Temporada', a.estacion && a.anio ? `${a.estacion} ${a.anio}` : a.anio],
+             ['Emisión', a.dia_emision ? `${a.dia_emision}${a.hora_emision ? ' · ' + String(a.hora_emision).slice(0,5) + ' JST' : ''}` : null],
+             ['Estreno', a.fecha_estreno], ['Clasificación', a.clasificacion], ['Ranking', a.ranking ? '#' + a.ranking : null],
+             ['Miembros', a.miembros ? Number(a.miembros).toLocaleString('es') : null]]
+            .filter(([, v]) => v).map(([k, v]) => `
+            <div><dt class="text-zinc-600">${k}</dt><dd class="mt-0.5 font-medium text-zinc-300">${esc(v)}</dd></div>`).join('')}
+        </dl>
+
+        ${a.trailer_url ? `
+        <details class="mt-5 rounded-2xl border border-white/10 bg-ink-800/60 overflow-hidden">
+          <summary class="cursor-pointer px-4 py-3 text-sm font-semibold hover:text-acc transition">▶ Ver tráiler oficial</summary>
+          <div class="ratio-16-9 border-t border-white/10"><iframe src="${esc(a.trailer_url)}" allowfullscreen loading="lazy" class="border-0"></iframe></div>
+        </details>` : ''}
+
+        <!-- Episodios -->
+        <section class="mt-7">
+          <h3 class="mb-3 text-lg font-bold">Episodios</h3>
+          ${bloques.length ? `
+            <div class="mb-3 flex flex-wrap gap-1.5" id="bloques">
+              ${bloques.map(([d, h], i) => `<button data-b="${i}" class="rounded-lg border px-3 py-1.5 text-xs transition ${i === 0 ? 'chip-on border-transparent' : 'border-white/10 text-zinc-400 hover:border-acc'}">${d} - ${h}</button>`).join('')}
+            </div>
+            <div id="lista-eps" class="grid grid-cols-2 sm:grid-cols-3 gap-2"></div>`
+          : `<p class="rounded-xl border border-dashed border-white/10 p-8 text-center text-sm text-zinc-500">
+               Todavía no hay episodios cargados para este título.</p>`}
+        </section>
+      </div>`;
+
+    // Render de episodios por bloque
+    const pintarBloque = i => {
+      const [d, h] = bloques[i];
+      const cont = $('#lista-eps'); if (!cont) return;
+      let html = '';
+      for (let n = d; n <= h; n++) {
+        const e = eps.find(x => x.numero === n);
+        const visto = vis && vis.episodio >= n;
+        html += `
+          <a href="#/ver/${esc(a.slug)}/${n}" data-cierra
+             class="flex items-center gap-2.5 rounded-xl border ${visto ? 'border-acc/40 bg-acc/[.07]' : 'border-white/10 bg-ink-800/60'} p-2.5 text-sm hover:border-acc transition group">
+            <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg ${visto ? 'btn-acc text-white' : 'bg-ink-700 text-zinc-400'} text-xs font-bold">${n}</span>
+            <span class="min-w-0 flex-1">
+              <span class="block truncate text-[12px] ${e?.titulo ? 'text-zinc-300' : 'text-zinc-500'} group-hover:text-acc transition">${esc(e?.titulo || 'Episodio ' + n)}</span>
+              ${e?.filler ? '<span class="text-[10px] text-amber-500">Relleno</span>' : ''}
+            </span>
+            ${visto ? '<span class="shrink-0 text-[10px] text-acc">visto</span>' : ''}
+          </a>`;
+      }
+      cont.innerHTML = html;
+    };
+    if (bloques.length) {
+      pintarBloque(0);
+      $('#bloques').onclick = e => {
+        const b = e.target.closest('[data-b]'); if (!b) return;
+        $$('#bloques button').forEach(x => x.className = 'rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-400 hover:border-acc transition');
+        b.className = 'rounded-lg border border-transparent chip-on px-3 py-1.5 text-xs transition';
+        pintarBloque(+b.dataset.b);
+      };
+    }
+
+    $('#cerrar-modal').onclick = Modal.cerrar;
+    DB.sumarVista(a.id);
+  },
+
+  /* ---------- REPRODUCTOR ---------- */
+  async reproductor(slug, numEp) {
+    const app = $('#app');
+    app.innerHTML = `<div class="mx-auto max-w-[1400px] px-4 py-8"><div class="skel animate-shimmer ratio-16-9 rounded-2xl"></div></div>`;
+
+    const a = await DB.porSlug(slug);
+    if (!a) { app.innerHTML = `<div class="p-20 text-center text-zinc-500">Anime no encontrado.</div>`; return; }
+
+    const eps = await DB.episodios(a.id);
+    const total = a.episodios_total || eps.length || 1;
+    const n = Math.min(Math.max(1, Number(numEp) || 1), Math.max(total, 1));
+    const ep = eps.find(e => e.numero === n);
+    const servidores = ep ? await DB.servidores(ep.id) : [];
+
+    Store.verEpisodio(a, n, total);
+
+    const prefServidor = Store.prefs().servidor;
+    let activo = Math.max(0, servidores.findIndex(s => s.nombre === prefServidor));
+
+    app.innerHTML = `
+    <div class="mx-auto max-w-[1400px] px-4 lg:px-6 py-6 lg:py-8">
+
+      <nav class="dim-cine mb-4 flex items-center gap-2 text-xs text-zinc-500">
+        <a href="#/inicio" class="hover:text-acc">Inicio</a> <span>/</span>
+        <button data-slug="${esc(a.slug)}" class="hover:text-acc">${esc(a.titulo_espanol || a.titulo)}</button> <span>/</span>
+        <span class="text-zinc-300">Episodio ${n}</span>
+      </nav>
+
+      <!-- Reproductor -->
+      <div class="overflow-hidden rounded-2xl border border-white/10 bg-black shadow-card">
+        <div class="ratio-16-9 bg-black" id="marco">
+          ${servidores.length ? '' : this._sinServidores(a)}
+        </div>
+
+        <!-- Pestañas de servidores -->
+        <div class="border-t border-white/10 bg-ink-850">
+          <div class="flex flex-wrap items-center gap-2 p-3">
+            <span class="mr-1 text-[11px] font-bold uppercase tracking-wider text-zinc-600">Servidores</span>
+            <div class="flex flex-wrap gap-1.5" id="tabs-servidor">
+              ${servidores.length ? servidores.map((s, i) => `
+                <button data-s="${i}" class="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition ${i === activo ? 'chip-on border-transparent' : 'border-white/10 text-zinc-400 hover:border-acc'}">
+                  <span class="h-1.5 w-1.5 rounded-full ${i === activo ? 'bg-white' : 'bg-zinc-600'}"></span>
+                  ${esc(s.nombre)} <span class="opacity-60">${esc(s.audio || 'SUB')}</span>
+                </button>`).join('')
+              : '<span class="text-xs text-zinc-600">Sin servidores disponibles para este episodio.</span>'}
+            </div>
+
+            <div class="ml-auto flex items-center gap-1.5">
+              <button id="btn-cine" title="Modo cine (C)" class="grid h-8 w-8 place-items-center rounded-lg border border-white/10 text-zinc-400 hover:border-acc hover:text-acc transition">
+                <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M7 5v14M17 5v14"/></svg>
+              </button>
+              <button id="btn-reportar" ${servidores.length ? '' : 'disabled'}
+                class="flex items-center gap-1.5 rounded-lg border border-rose-500/25 px-3 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10 disabled:opacity-30 transition">
+                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+                Reportar enlace
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Navegación de episodios -->
+      <div class="dim-cine mt-4 grid grid-cols-3 gap-2">
+        <a href="${n > 1 ? `#/ver/${esc(a.slug)}/${n - 1}` : '#'}"
+           class="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-ink-800 py-3 text-sm font-medium transition ${n > 1 ? 'hover:border-acc hover:text-acc' : 'pointer-events-none opacity-30'}">
+          ← <span class="hidden sm:inline">Capítulo anterior</span><span class="sm:hidden">Anterior</span>
+        </a>
+        <button data-slug="${esc(a.slug)}" class="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-ink-800 py-3 text-sm font-medium hover:border-acc hover:text-acc transition">
+          ☰ <span class="hidden sm:inline">Lista de episodios</span><span class="sm:hidden">Lista</span>
+        </button>
+        <a href="${n < total ? `#/ver/${esc(a.slug)}/${n + 1}` : '#'}"
+           class="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-ink-800 py-3 text-sm font-medium transition ${n < total ? 'hover:border-acc hover:text-acc' : 'pointer-events-none opacity-30'}">
+          <span class="hidden sm:inline">Siguiente capítulo</span><span class="sm:hidden">Siguiente</span> →
+        </a>
+      </div>
+
+      <!-- Info -->
+      <div class="dim-cine mt-6 flex flex-col sm:flex-row gap-5 rounded-2xl border border-white/10 bg-ink-800/50 p-5">
+        <img src="${esc(a.portada || PLACEHOLDER)}" alt="" class="h-40 w-28 shrink-0 rounded-xl object-cover bg-ink-700 mx-auto sm:mx-0">
+        <div class="min-w-0 flex-1">
+          <h1 class="text-xl sm:text-2xl font-bold leading-tight">${esc(a.titulo_espanol || a.titulo)}</h1>
+          <p class="mt-0.5 text-sm text-acc">Episodio ${n}${ep?.titulo ? ` · ${esc(ep.titulo)}` : ''}</p>
+          <div class="mt-2.5 flex flex-wrap gap-1.5">
+            ${(a.generos || []).map(g => `<a href="#/directorio?genero=${encodeURIComponent(g)}" class="rounded-full border border-white/10 px-2.5 py-0.5 text-[11px] text-zinc-400 hover:border-acc hover:text-acc transition">${esc(g)}</a>`).join('')}
+          </div>
+          <p class="line-3 mt-3 text-sm leading-relaxed text-zinc-500">${esc(a.sinopsis || '')}</p>
+          <div class="mt-3 flex gap-2">
+            <button data-fav="${a.mal_id}" class="rounded-lg border border-white/15 px-4 py-2 text-xs font-semibold hover:border-acc transition">
+              ${Store.esFavorito(a.mal_id) ? '✓ En Mi Lista' : '+ Mi Lista'}
+            </button>
+            <button data-slug="${esc(a.slug)}" class="rounded-lg border border-white/15 px-4 py-2 text-xs font-semibold hover:border-acc transition">Ficha técnica</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Selector rápido de episodios -->
+      ${total > 1 ? `
+      <section class="dim-cine mt-6">
+        <h3 class="mb-3 text-sm font-bold uppercase tracking-wider text-zinc-500">Todos los episodios</h3>
+        <div class="flex flex-wrap gap-1.5">
+          ${Array.from({ length: total }, (_, i) => i + 1).map(x => `
+            <a href="#/ver/${esc(a.slug)}/${x}" class="grid h-9 min-w-[36px] place-items-center rounded-lg border px-2 text-xs font-semibold transition ${x === n ? 'chip-on border-transparent' : 'border-white/10 text-zinc-400 hover:border-acc hover:text-acc'}">${x}</a>`).join('')}
+        </div>
+      </section>` : ''}
+    </div>`;
+
+    // Carga del iframe del servidor activo
+    const cargar = i => {
+      const s = servidores[i]; if (!s) return;
+      activo = i;
+      Store.setPref('servidor', s.nombre);
+      $('#marco').innerHTML = `<iframe src="${esc(s.embed_url)}" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture"
+        referrerpolicy="origin" sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
+        class="h-full w-full border-0 bg-black"></iframe>`;
+      $$('#tabs-servidor button').forEach((b, j) => {
+        b.className = `flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition ${j === i ? 'chip-on border-transparent' : 'border-white/10 text-zinc-400 hover:border-acc'}`;
+        b.firstElementChild.className = `h-1.5 w-1.5 rounded-full ${j === i ? 'bg-white' : 'bg-zinc-600'}`;
+      });
+    };
+    if (servidores.length) cargar(activo);
+    const tabs = $('#tabs-servidor');
+    if (tabs) tabs.onclick = e => { const b = e.target.closest('[data-s]'); if (b) cargar(+b.dataset.s); };
+
+    $('#btn-cine').onclick = () => { document.body.classList.toggle('cine'); Store.setPref('cine', document.body.classList.contains('cine')); };
+    const br = $('#btn-reportar');
+    if (br) br.onclick = () => Reporte.abrir(servidores[activo]);
+
+    // Navegación con flechas del teclado
+    window.__navEp = { slug: a.slug, n, total };
+  },
+
+  _sinServidores(a) {
+    return `<div class="grid h-full w-full place-items-center bg-gradient-to-br from-ink-800 to-ink-900 text-center p-6">
+      <div>
+        <p class="mb-2 text-3xl">🎬</p>
+        <p class="mb-1 text-sm font-semibold text-zinc-300">Aún no hay servidores para este episodio</p>
+        <p class="text-xs text-zinc-600 max-w-sm">Los enlaces embebidos se cargan en la tabla <code class="text-acc">servidores</code> de Supabase.
+        ${a.trailer_url ? 'Mientras tanto, puedes ver el tráiler oficial desde la ficha técnica.' : ''}</p>
+      </div>
+    </div>`;
+  }
+};
+
+/* ── 7. MODALES ──────────────────────────────────────────────────────────── */
+const Modal = {
+  abrir(slug) { Vistas.ficha(slug); },
+  cerrar() {
+    $('#modal').hidden = true;
+    $('#modal-box').innerHTML = '';
+    document.body.style.overflow = '';
+  }
+};
+
+const Reporte = {
+  servidor: null,
+  abrir(s) {
+    if (!s) return toast('No hay servidor activo', 'err');
+    this.servidor = s;
+    $('#rep-servidor').textContent = `Servidor: ${s.nombre}`;
+    $('#modal-rep').hidden = false;
+  },
+  cerrar() { $('#modal-rep').hidden = true; $('#rep-comentario').value = ''; },
+  async enviar() {
+    const motivo = $('input[name="motivo"]:checked')?.value || 'no_carga';
+    const ok = await DB.reportar(this.servidor?.id, motivo, $('#rep-comentario').value.trim());
+    this.cerrar();
+    toast(ok ? 'Reporte enviado, ¡gracias! 🙏' : 'No se pudo enviar el reporte', ok ? 'ok' : 'err');
+  }
+};
+
+/* ── 8. BUSCADOR EN TIEMPO REAL ──────────────────────────────────────────── */
+const Buscador = {
+  init() {
+    const input = $('#q'), caja = $('#sugerencias');
+
+    const render = lista => {
+      if (!lista.length) {
+        caja.innerHTML = `<p class="p-6 text-center text-sm text-zinc-500">Sin resultados</p>`;
+        caja.hidden = false; return;
+      }
+      caja.innerHTML = lista.map(a => `
+        <button data-slug="${esc(a.slug)}" class="flex w-full items-center gap-3 rounded-xl p-2 text-left hover:bg-white/5 transition group">
+          <img src="${esc(a.portada || PLACEHOLDER)}" alt="" loading="lazy" class="h-16 w-11 shrink-0 rounded-lg object-cover bg-ink-700">
+          <span class="min-w-0 flex-1">
+            <span class="block truncate text-sm font-semibold group-hover:text-acc transition">${esc(a.titulo_espanol || a.titulo)}</span>
+            <span class="block truncate text-[11px] text-zinc-500">${esc(a.tipo || 'TV')} · ${a.anio || '—'}${a.puntuacion ? ` · ★ ${Number(a.puntuacion).toFixed(1)}` : ''}</span>
+            <span class="block truncate text-[10px] text-zinc-600">${esc((a.generos || []).slice(0, 3).join(' · '))}</span>
+          </span>
+        </button>`).join('') +
+        `<a href="#/directorio" class="mt-1 block rounded-xl p-2.5 text-center text-xs text-zinc-500 hover:text-acc transition">Ver directorio completo →</a>`;
+      caja.hidden = false;
+    };
+
+    const buscar = debounce(async () => {
+      const q = input.value.trim();
+      if (q.length < 2) { caja.hidden = true; return; }
+      caja.innerHTML = `<div class="space-y-1 p-1.5">${'<div class="flex gap-3 p-2"><div class="skel animate-shimmer h-16 w-11 rounded-lg"></div><div class="flex-1 space-y-2 py-2"><div class="skel animate-shimmer h-3 w-3/4 rounded"></div><div class="skel animate-shimmer h-2.5 w-1/3 rounded"></div></div></div>'.repeat(3)}</div>`;
+      caja.hidden = false;
+      render(await DB.buscar(q));
+    }, 240);
+
+    input.addEventListener('input', buscar);
+    input.addEventListener('focus', () => { if (input.value.trim().length >= 2) buscar(); });
+    caja.addEventListener('click', e => {
+      const b = e.target.closest('[data-slug]');
+      if (b) { caja.hidden = true; input.value = ''; Modal.abrir(b.dataset.slug); }
+    });
+    document.addEventListener('click', e => {
+      if (!e.target.closest('#q') && !e.target.closest('#sugerencias')) caja.hidden = true;
+    });
+  }
+};
+
+/* ── 9. ROUTER ───────────────────────────────────────────────────────────── */
+const Router = {
+  async render() {
+    const hash = location.hash.slice(2) || 'inicio';
+    const [ruta, query] = hash.split('?');
+    const partes = ruta.split('/').filter(Boolean);
+    const params = new URLSearchParams(query || '');
+
+    $$('[data-nav]').forEach(a => {
+      const on = a.getAttribute('href') === '#/' + partes[0];
+      a.classList.toggle('text-white', on);
+      a.classList.toggle('bg-white/5', on);
+      a.classList.toggle('text-zinc-400', !on);
+    });
+
+    if (partes[0] !== 'ver') document.body.classList.remove('cine');
+    window.scrollTo({ top: 0 });
+
+    switch (partes[0]) {
+      case 'directorio': return Vistas.directorio(params);
+      case 'calendario': return Vistas.calendario();
+      case 'favoritos':  return Vistas.favoritos();
+      case 'anime':      await Vistas.inicio(); return Modal.abrir(partes[1]);
+      case 'ver':        return Vistas.reproductor(partes[1], partes[2]);
+      default:           return Vistas.inicio();
+    }
+  },
+  init() {
+    addEventListener('hashchange', () => { Modal.cerrar(); this.render(); });
+    this.render();
+  }
+};
+
+/* ── 10. EVENTOS GLOBALES ────────────────────────────────────────────────── */
+document.addEventListener('click', async e => {
+  // Abrir ficha
+  const ficha = e.target.closest('[data-slug]');
+  const ver   = e.target.closest('[data-ver]');
+  const fav   = e.target.closest('[data-fav]');
+  const share = e.target.closest('[data-compartir]');
+
+  if (fav) {
+    e.preventDefault(); e.stopPropagation();
+    const malId = +fav.dataset.fav;
+    let a = Store.favoritos().find(x => x.mal_id === malId);
+    if (!a) {
+      const cache = await DB._mock().catch(() => ({ animes: [] }));
+      a = (cache.animes || []).find(x => x.mal_id === malId);
+      if (!a && SB) { const { data } = await SB.from('animes').select('*').eq('mal_id', malId).single(); a = data; }
+    }
+    if (a) { const added = Store.alternarFavorito(a); fav.innerHTML = added ? '<span class="text-acc">✓</span>' : '+'; }
+    return;
+  }
+
+  if (ver)  { e.preventDefault(); e.stopPropagation();
+    const vis = Store.historial().find(h => h.slug === ver.dataset.ver);
+    location.hash = `#/ver/${ver.dataset.ver}/${vis?.episodio || 1}`; return; }
+
+  if (share) {
+    e.preventDefault();
+    const url = `${location.origin}${location.pathname}#/anime/${share.dataset.compartir}`;
+    if (navigator.share) { try { await navigator.share({ title:'AnimeFlow', url }); } catch {} }
+    else { await navigator.clipboard.writeText(url); toast('Enlace copiado ✓'); }
+    return;
+  }
+
+  if (ficha && !e.target.closest('a[href^="#/ver"]')) { e.preventDefault(); Modal.abrir(ficha.dataset.slug); return; }
+
+  if (e.target.closest('[data-cierra]')) Modal.cerrar();
+  if (e.target.closest('[data-cerrar-rep]')) Reporte.cerrar();
+});
+
+$('#modal-bg').onclick = Modal.cerrar;
+$('#rep-enviar').onclick = () => Reporte.enviar();
+
+// Menú géneros
+$('#menu-generos')?.addEventListener('click', e => {
+  if (e.target.closest('button') === $('#menu-generos').firstElementChild) $('#dd-generos').hidden = !$('#dd-generos').hidden;
+});
+document.addEventListener('click', e => { if (!e.target.closest('#menu-generos')) $('#dd-generos').hidden = true; });
+
+// Paleta de acento
+$('#btn-tema').onclick = e => { e.stopPropagation(); $('#paleta').hidden = !$('#paleta').hidden; };
+$('#paleta').onclick = e => {
+  const b = e.target.closest('[data-tema]'); if (!b) return;
+  document.documentElement.dataset.tema = b.dataset.tema;
+  Store.setPref('tema', b.dataset.tema); $('#paleta').hidden = true;
+};
+document.addEventListener('click', e => { if (!e.target.closest('#paleta') && !e.target.closest('#btn-tema')) $('#paleta').hidden = true; });
+
+// Menú móvil
+$('#btn-menu').onclick = () => { $('#menu-movil').hidden = !$('#menu-movil').hidden; };
+$('#menu-movil').onclick = () => { $('#menu-movil').hidden = true; };
+
+// Anime aleatorio
+$('#btn-random').onclick = async () => {
+  const { items } = await DB.catalogo({ orden:'puntuacion', pagina: Math.floor(Math.random() * 3) });
+  if (!items.length) return toast('Catálogo vacío', 'err');
+  const a = items[Math.floor(Math.random() * items.length)];
+  toast(`🎲 ${a.titulo_espanol || a.titulo}`); Modal.abrir(a.slug);
+};
+
+// Exportar / importar / borrar
+$('#btn-exportar').onclick = () => Store.exportar();
+$('#btn-importar').onclick = () => $('#file-importar').click();
+$('#file-importar').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => { try { Store.importar(JSON.parse(r.result)); } catch { toast('JSON inválido', 'err'); } };
+  r.readAsText(f);
+};
+$('#btn-borrar').onclick = () => { if (confirm('¿Borrar Mi Lista y el historial de este navegador?')) Store.borrar(); };
+
+// Atajos de teclado
+document.addEventListener('keydown', e => {
+  const escribiendo = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+  if (e.key === '/' && !escribiendo) { e.preventDefault(); $('#q').focus(); }
+  if (e.key === 'Escape') { Modal.cerrar(); Reporte.cerrar(); $('#sugerencias').hidden = true; $('#q').blur(); }
+  if (escribiendo) return;
+  if (e.key.toLowerCase() === 'r') $('#btn-random').click();
+  if (e.key.toLowerCase() === 'c' && location.hash.startsWith('#/ver')) $('#btn-cine')?.click();
+  const nav = window.__navEp;
+  if (nav && location.hash.startsWith('#/ver')) {
+    if (e.key === 'ArrowRight' && nav.n < nav.total) location.hash = `#/ver/${nav.slug}/${nav.n + 1}`;
+    if (e.key === 'ArrowLeft'  && nav.n > 1)         location.hash = `#/ver/${nav.slug}/${nav.n - 1}`;
+  }
+});
+
+// Navbar compacta al hacer scroll
+addEventListener('scroll', () => {
+  $('#navbar').classList.toggle('shadow-2xl', scrollY > 20);
+  $('#navbar').classList.toggle('border-white/10', scrollY > 20);
+}, { passive: true });
+
+/* ── 11. ARRANQUE ────────────────────────────────────────────────────────── */
+(async function init() {
+  $('#anio-actual').textContent = new Date().getFullYear();
+  document.documentElement.dataset.tema = Store.prefs().tema || 'violeta';
+  $('#aviso-demo').hidden = !MODO_DEMO;
+  UI.badgeFavoritos();
+  Buscador.init();
+
+  // Poblar el menú de géneros
+  const gs = await DB.generos();
+  $('#lista-generos').innerHTML = gs.map(g =>
+    `<a href="#/directorio?genero=${encodeURIComponent(g)}" class="truncate rounded-lg px-2.5 py-1.5 text-xs text-zinc-400 hover:bg-white/5 hover:text-acc transition">${esc(g)}</a>`).join('');
+
+  Router.init();
+  console.log(`%cAnimeFlow%c ${MODO_DEMO ? 'modo demo (mock-data.json)' : 'conectado a Supabase'}`,
+    'background:#8b5cf6;color:#fff;padding:2px 8px;border-radius:4px;font-weight:bold', 'color:#a1a1aa');
+})();
+</script>
+</body>
+</html>
